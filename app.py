@@ -245,10 +245,12 @@ if not current_hold.empty and not df_rt.empty:
     total_cum = merged['累计收益(元)'].sum()
 
     # 显示总览
-    st.markdown(f'<div class="big-number">{total_assets:,.2f}</div>', unsafe_allow_html=True)
-
-    today_class = "positive" if total_today >= 0 else "negative"
-    cum_class = "positive" if total_cum >= 0 else "negative"
-
-    st.markdown(f"""
-    <div class="gain-box">
+    st.markdown(
+    '<div class="holding-card">'
+    f'<div class="fund-name">{row["名称"]}</div>'
+    f'<div class="amount">¥{row["估计金额"]:,.2f}</div>'
+    '<div class="metrics">'
+    # ... 继续拼接其他部分
+    '</div>',
+    unsafe_allow_html=True
+)
