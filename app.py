@@ -1,4 +1,4 @@
-# app.py - 个人基金估值小工具（清理重复 + 语法修复版）
+# app.py - 极简修复版（语法干净，功能完整）
 import streamlit as st
 import akshare as ak
 import pandas as pd
@@ -7,34 +7,103 @@ from datetime import datetime
 st.set_page_config(page_title="基金估值小工具", page_icon="📈", layout="wide")
 
 st.title("个人基金估值查询")
-st.caption(f"数据来源：东方财富估算净值 via AKShare | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.caption(f"东方财富估算数据 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-DEFAULT_FUNDS = [
-    "110022",  # 易方达优选成长混合
-    "001593",  # 南方成份精选混合
-    "000001",  # 华夏成长混合
-    "519697",  # 长信量化先锋股票
-]
+DEFAULT_FUNDS = ["110022", "001593", "000001", "519697"]
 
 with st.sidebar:
-    st.header("基金选择")
-    
+    st.header("选择基金")
     selected_funds = st.multiselect(
-        "选择关注的基金",
+        "关注的基金",
         options=DEFAULT_FUNDS + ["其他"],
-        default=DEFAULT_FUNDS[:3],
-        help="可多选"
+        default=DEFAULT_FUNDS[:3]
     )
     
-    custom_input = st.text_input(
-        "手动输入基金代码（多个用逗号分隔）",
-        placeholder="例如：161725,005827,159941"
-    )
-    
-    if custom_input:
-        extras = [c.strip() for c in custom_input.split(",") if c.strip().isdigit() and len(c.strip()) == 6]
+    custom = st.text_input("手动输入代码（逗号分隔）", "")
+    if custom:
+        extras = [c.strip() for c in custom.split(",") if c.strip().isdigit() and len(c.strip()) == 6]
         selected_funds = list(set(selected_funds + extras))
     
+    st.button("刷新数据", type="primary")  # 按钮点击会自动 rerun
+
+if not selected_funds:
+    st.info("请选择或输入至少一个基金代码")
+else:
+    with st.spinner("拉取数据中..."):
+        try:
+            df = ak.fund_value_estimation_em(symbol="全部")
+            df['基金代码'] = df['基金代码'].astype(str).str.zfill(6)
+            
+            # 显示列名调试
+            st.caption("当前列名（调试用）：")
+            st.code(", ".join(df.columns.tolist()))
+            
+            # 动态找列
+            value_col = next((c for c in df.columns if '估算值' in c), None)
+            growth_col = next((c for c in df.columns if '估算增长率' in c or '增长率' in c), None)
+            bias_col = next((c for c in df.columns if '偏差' in c), None)
+            
+            if not value_col or not growth_col:
+                st.error("列名匹配失败，请把上方列名列表复制给我调整代码。")
+            else:
+                cols = ['基金代码', '基金名称', value_col, growth_col]
+                if bias_col:
+                    cols.append(bias_col)
+                
+                watched = df[df['基金代码'].isin(selected_funds)][cols].copy()
+                
+                watched = watched.rename(columns={
+                    '基金代码': '代码',
+                    '基金名称': '名称',
+                    value_col: '估算净值',
+                    growth_col: '估算涨幅',
+                })
+                if bias_col:
+                    watched = watched.rename(columns={bias_col: '偏差'})
+                
+                # 转数值 + 清洗
+                watched['估算净值'] = pd.to_numeric(
+                    watched['估算净值'].astype(str).str.replace(',', '').str.strip().replace(['', '--', '无'], float('nan')),
+                    errors='coerce'
+                )
+                
+                watched['估算涨幅(%)'] = pd.to_numeric(
+                    watched['估算涨幅'].astype(str).str.replace('%', '').str.strip().replace(['', '--'], '0'),
+                    errors='coerce'
+                ).fillna(0)
+                
+                if '偏差' in watched.columns:
+                    watched['偏差'] = pd.to_numeric(
+                        watched['偏差'].astype(str).str.replace('%', '').str.strip().replace(['', '--'], '0'),
+                        errors='coerce'
+                    ).fillna(0)
+                
+                watched = watched.sort_values('估算涨幅(%)', ascending=False).reset_index(drop=True)
+                
+                # 格式化显示
+                def fmt_float(x): return "—" if pd.isna(x) else f"{x:.4f}"
+                def fmt_pct(x):   return "—" if pd.isna(x) else f"{x:+.2f}%"
+                
+                st.subheader(f"估值快照（{len(watched)} 只）")
+                st.dataframe(
+                    watched.style.format({
+                        '估算净值': fmt_float,
+                        '估算涨幅(%)': fmt_pct,
+                        '偏差': fmt_pct if '偏差' in watched.columns else None
+                    }).background_gradient(subset=['估算涨幅(%)'], cmap='RdYlGn', vmin=-5, vmax=5),
+                    use_container_width=True
+                )
+                
+                st.subheader("涨幅对比")
+                st.bar_chart(watched.set_index('名称')['估算涨幅(%)'].fillna(0), height=350)
+                
+                st.caption("数据仅参考 | 非交易时间可能为空")
+        
+        except Exception as e:
+            st.error(f"错误：{str(e)}")
+
+st.markdown("---")
+st.caption("个人工具 | 数据来源东方财富 | 仅供参考")    
     if st.button("🔄 刷新数据", type="primary"):
         st.rerun()
 
