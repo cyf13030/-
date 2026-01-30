@@ -236,4 +236,4 @@ if not current_hold.empty and not df_rt.empty:
         </div>
         """, unsafe_allow_html=True)
 else:
-    st.info("暂无持仓数据或实时估值
+    st.info("暂无持仓数据或实时估值拉取失败。请在侧边栏添加份额，或检查网络。")
