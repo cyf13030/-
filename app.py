@@ -19,6 +19,7 @@ DEFAULT_FUNDS = [
 
 with st.sidebar:
     st.header("基金选择")
+    
     selected_funds = st.multiselect(
         "选择关注的基金",
         options=DEFAULT_FUNDS + ["其他"],
@@ -30,6 +31,7 @@ with st.sidebar:
         "手动输入基金代码（多个用逗号分隔）",
         placeholder="例如：161725,005827,159941"
     )
+    
     if custom_input:
         extras = [c.strip() for c in custom_input.split(",") if c.strip().isdigit() and len(c.strip()) == 6]
         selected_funds = list(set(selected_funds + extras))
