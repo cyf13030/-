@@ -153,7 +153,7 @@ st.markdown("---")
 st.markdown("""
 **免责声明**：估值数据来源于东方财富，仅供个人参考，不构成投资建议。以官方公布净值为准。  
 **建议**：定期本地运行 `pip install --upgrade akshare streamlit pandas matplotlib` 保持更新。
-""")                )
+""")
 
                 st.bar_chart(watched.set_index('名称')['估算涨幅(%)'])
 
