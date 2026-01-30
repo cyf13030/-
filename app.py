@@ -1,132 +1,77 @@
-# app.py
+# app.py  (updated for 2026 AKShare compatibility)
 import streamlit as st
 import akshare as ak
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime
 import time
 
-# ==================== 配置部分 ====================
-# 你可以在这里修改默认关注的基金（基金代码列表）
-DEFAULT_FUNDS = [
-    "110022",   # 易方达优选成长混合
-    "001593",   # 南方成份精选混合
-    "000001",   # 华夏成长混合
-    "519697",   # 长信量化先锋股票
-    # 在这里添加你自己的基金代码，例如 "161725", "005827" 等
-]
+st.set_page_config(page_title="基金估值小工具", page_icon="📈", layout="wide")
 
-# 页面标题和布局
-st.set_page_config(
-    page_title="个人基金估值小工具",
-    page_icon="📈",
-    layout="wide"
-)
+st.title("个人基金估值查询")
+st.caption(f"东方财富估算数据 via AKShare | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-# ==================== 标题和说明 ====================
-st.title("📊 个人基金实时估值查询")
-st.caption(f"数据来源：东方财富网净值估算（通过 AKShare 获取） | 更新时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-st.markdown("""
-**使用说明**：
-- 左侧可多选或手动输入基金代码
-- 显示东方财富提供的**估算净值**和**估算增长率**（通常交易日 9:30 后开始更新，15:00 后较准确）
-- 估值**仅供个人参考**，不构成任何投资建议
-- 如果数据为空：可能是接口延迟、非交易日或代码错误，请稍等或刷新
-""")
+DEFAULT_FUNDS = ["110022", "001593", "000001", "519697"]
 
-# ==================== 侧边栏 - 基金选择 ====================
 with st.sidebar:
-    st.header("基金选择")
-    
-    # 多选默认基金
-    selected_funds = st.multiselect(
-        "选择关注的基金",
-        options=DEFAULT_FUNDS + ["其他"],
-        default=DEFAULT_FUNDS[:4],  # 默认显示前4个
-        help="可多选，按住 Ctrl 或 Cmd 键"
-    )
-    
-    # 手动输入新基金
-    custom_input = st.text_input(
-        "或手动输入基金代码（多个用逗号分隔）",
-        placeholder="例如：161725,005827,159941",
-        help="支持多个，用英文逗号分隔"
-    )
-    
-    if custom_input:
-        custom_list = [code.strip() for code in custom_input.split(",") if code.strip().isdigit() and len(code.strip()) == 6]
-        selected_funds = list(set(selected_funds + custom_list))  # 去重
-    
-    # 刷新按钮
-    if st.button("🔄 立即刷新数据", type="primary"):
-        st.session_state["last_refresh"] = time.time()
+    st.header("选择基金")
+    selected = st.multiselect("关注的基金", DEFAULT_FUNDS + ["其他"], default=DEFAULT_FUNDS[:3])
+    custom = st.text_input("手动输入代码 (逗号分隔)", "")
+    if custom:
+        extras = [c.strip() for c in custom.split(",") if c.strip().isdigit() and len(c.strip()) == 6]
+        selected = list(set(selected + extras))
+    if st.button("刷新"):
         st.rerun()
 
-# ==================== 主内容区 ====================
-if not selected_funds:
-    st.info("请在左侧选择或输入至少一个基金代码")
+if not selected:
+    st.info("请选择或输入基金代码")
 else:
-    with st.spinner("正在拉取最新估值数据..."):
+    with st.spinner("获取数据..."):
         try:
-            # 获取东方财富全市场估算净值数据
             df = ak.fund_value_estimation_em(symbol="全部")
-            
-            # 过滤关注的基金
-            df['基金代码'] = df['基金代码'].astype(str).str.zfill(6)  # 补齐6位
-            watched = df[df['基金代码'].isin(selected_funds)].copy()
-            
-            if watched.empty:
-                st.warning("未找到匹配的估值数据，可能原因：\n1. 非交易时间\n2. 基金代码错误\n3. 接口今日暂未更新\n请稍后再试或检查代码")
+            df['基金代码'] = df['基金代码'].astype(str).str.zfill(6)
+
+            # Debug: show actual columns
+            st.caption("调试：当前接口返回的列名")
+            st.code(", ".join(df.columns.tolist()), language="text")
+
+            # Dynamic column mapping (add more aliases as seen in your logs)
+            value_col = next((c for c in df.columns if "估算值" in c or "估值" in c or "IOPV" in c), None)
+            growth_col = next((c for c in df.columns if "增长率" in c or "涨幅" in c or "增长" in c), None)
+            bias_col = next((c for c in df.columns if "偏差" in c or "偏离" in c), None)
+
+            if not value_col or not growth_col:
+                st.error("无法识别估算值/增长率列。请查看上方列名列表，并告诉我，我帮你调整。")
             else:
-                # 数据清洗和格式化
-                watched = watched[[
-                    '基金代码', '基金名称', 
-                    '交易日-估算数据-估算值', 
-                    '交易日-估算数据-估算增长率',
-                    '估算偏差'
-                ]]
-                
-                # 重命名列（更友好）
-                watched.columns = ['代码', '名称', '估算净值', '估算涨幅', '偏差']
-                
-                # 转换为数值方便排序和图表
-                watched['估算涨幅(%)'] = watched['估算涨幅'].str.rstrip('%').replace('', '0').astype(float)
-                watched['估算净值'] = pd.to_numeric(watched['估算净值'], errors='coerce')
-                
-                # 排序：涨幅降序
-                watched = watched.sort_values('估算涨幅(%)', ascending=False).reset_index(drop=True)
-                
-                # 显示表格
-                st.subheader(f"估值快照（{len(watched)} 只基金）")
+                watched = df[df['基金代码'].isin(selected)][['基金代码', '基金名称', value_col, growth_col]]
+                if bias_col:
+                    watched[bias_col] = df[bias_col]
+
+                watched = watched.rename(columns={
+                    '基金代码': '代码',
+                    '基金名称': '名称',
+                    value_col: '估算净值',
+                    growth_col: '估算涨幅',
+                    bias_col: '偏差' if bias_col else None
+                }).dropna(subset=['估算净值'], how='all')
+
+                watched['估算涨幅(%)'] = watched['估算涨幅'].astype(str).str.replace('%', '').str.strip().replace('', '0').astype(float)
+
+                watched = watched.sort_values('估算涨幅(%)', ascending=False)
+
                 st.dataframe(
                     watched.style.format({
                         '估算净值': '{:.4f}',
                         '估算涨幅(%)': '{:+.2f}%',
-                        '偏差': '{:.2f}%'
-                    }).background_gradient(
-                        subset=['估算涨幅(%)'],
-                        cmap='RdYlGn',
-                        vmin=-3, vmax=3
-                    ),
-                    use_container_width=True,
-                    hide_index=False
+                        '偏差': '{:.2f}%' if '偏差' in watched else None
+                    }).background_gradient(subset=['估算涨幅(%)'], cmap='RdYlGn', vmin=-5, vmax=5),
+                    use_container_width=True
                 )
-                
-                # 柱状图
-                st.subheader("估算涨幅对比")
-                chart_data = watched.set_index('名称')['估算涨幅(%)']
-                st.bar_chart(chart_data, height=400)
-                
-                # 额外信息
-                st.caption(f"最后刷新：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                
-        except Exception as e:
-            st.error(f"数据获取失败：{str(e)}")
-            st.info("常见原因：网络波动、AKShare 接口临时不可用、今日非交易日。请 1-2 分钟后重试，或检查是否安装了最新版 akshare（pip install akshare --upgrade）")
 
-# ==================== 页脚 ====================
+                st.bar_chart(watched.set_index('名称')['估算涨幅(%)'])
+
+        except Exception as e:
+            st.error(f"错误：{str(e)}")
+            st.info("建议：升级 AKShare (pip install akshare --upgrade)，检查网络，或非交易时间数据为空。")
+
 st.markdown("---")
-st.markdown("""
-**免责声明**：本工具仅用于个人学习和参考，估值数据来源于第三方（东方财富），存在延迟或偏差可能，不保证准确性。请以官方渠道净值和公告为准。  
-**技术栈**：Streamlit + AKShare  
-**更新建议**：本地运行 `pip install --upgrade akshare streamlit pandas` 保持最新
-""")
+st.caption("个人工具 | 数据仅参考 | AKShare + Streamlit")
