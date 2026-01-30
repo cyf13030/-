@@ -236,5 +236,20 @@ else:
     st.info("暂无持仓数据或估值未加载。请在侧边栏输入份额，或等待交易日。")
 
 # 底部导航
-st.markdown("""
-<div class="botto
+st.markdown(
+    '<div class="holding-card">'
+    f'<div class="fund-name">{row["名称"]}</div>'   # 假设这是你的变量名
+    f'<div class="amount">¥{row["估计金额"]:,.2f}</div>'
+    '<div class="metrics">'
+    f'<div class="metric-item">'
+    f'  <div class="metric-label">今日收益</div>'
+    f'  <div class="{today_class}">{today_gain:+,.2f} ({row["日涨跌幅%"]:+.2f}%)</div>'
+    '</div>'
+    f'<div class="metric-item">'
+    f'  <div class="metric-label">累计收益</div>'
+    f'  <div class="{cum_class}">{cum_gain:+,.2f} ({cum_pct:+.2f}%)</div>'
+    '</div>'
+    '</div>'
+    '</div>',
+    unsafe_allow_html=True
+)
