@@ -12,19 +12,27 @@ st.caption(f"东方财富估算数据 | {datetime.now().strftime('%Y-%m-%d %H:%M
 DEFAULT_FUNDS = ["110022", "001593", "000001", "519697"]
 
 with st.sidebar:
-    st.header("选择基金")
+    st.header("基金选择")
+    
     selected_funds = st.multiselect(
-        "关注的基金",
+        "选择关注的基金",
         options=DEFAULT_FUNDS + ["其他"],
-        default=DEFAULT_FUNDS[:3]
+        default=DEFAULT_FUNDS[:3],
+        help="可多选"
     )
     
-    custom = st.text_input("手动输入代码（逗号分隔）", "")
-    if custom:
-        extras = [c.strip() for c in custom.split(",") if c.strip().isdigit() and len(c.strip()) == 6]
+    custom_input = st.text_input(
+        "手动输入基金代码（多个用逗号分隔）",
+        placeholder="例如：161725,005827,159941"
+    )
+    
+    if custom_input:
+        extras = [c.strip() for c in custom_input.split(",") if c.strip().isdigit() and len(c.strip()) == 6]
         selected_funds = list(set(selected_funds + extras))
     
-    st.button("刷新数据", type="primary")  # 按钮点击会自动 rerun
+    # 按钮放在 sidebar 最后，不要额外缩进
+    if st.button("🔄 刷新数据", type="primary"):
+        st.rerun()
 
 if not selected_funds:
     st.info("请选择或输入至少一个基金代码")
