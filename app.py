@@ -1,13 +1,15 @@
+# app.py - 小倍养基 - 完整实时持仓仪表盘（2026年1月版）
 import streamlit as st
 import pandas as pd
+import akshare as ak
 import time
 from datetime import datetime
 
 # ────────────────────────────────────────────────
-# 页面配置 & 自定义 CSS（支付宝/微信养基风格）
+# 页面配置 & CSS（支付宝/微信养基风格）
 # ────────────────────────────────────────────────
 st.set_page_config(
-    page_title="小倍养基 - 实时持仓",
+    page_title="小倍养基 - 账户总览",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -108,31 +110,36 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ────────────────────────────────────────────────
-# 标题 & 头部
-# ────────────────────────────────────────────────
+# 标题
 st.markdown('<div class="header-bar">小倍养基 - 成长养基</div>', unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# 持仓数据（可修改为你的真实持仓）
+# 持仓数据（可替换为你的真实持仓列表）
 # ────────────────────────────────────────────────
 initial_data = {
-    '代码': ['000698', '159941', '005827', '110022'],
-    '名称': ['金信精选成长混合C', '广发纳指100ETF联接C', '银河创新混合C', '易方达优选成长混合'],
-    '份额': [10000.0, 2000.0, 6000.0, 5000.0],
-    '成本金额': [105000.0, 11800.0, 58000.0, 48000.0]
+    '代码': ['110022', '001593', '000001', '519697', '000698'],
+    '名称': [
+        '易方达优选成长混合',
+        '南方成份精选混合',
+        '华夏成长混合',
+        '长信量化先锋股票',
+        '金信精选成长混合C'
+    ]
 }
 df_base = pd.DataFrame(initial_data)
 
-# session_state 保存用户修改后的份额和成本
+# session_state 保存份额和成本金额
 if 'holdings' not in st.session_state:
-    st.session_state.holdings = df_base.set_index('代码')[['份额', '成本金额']].to_dict(orient='index')
+    st.session_state.holdings = {
+        code: {'份额': 0.0, '成本金额': 0.0}
+        for code in df_base['代码']
+    }
 
 # ────────────────────────────────────────────────
-# 侧边栏：管理持仓 + 自动刷新设置
+# 侧边栏：持仓管理 + 自动刷新设置
 # ────────────────────────────────────────────────
 with st.sidebar:
-    st.header("持仓设置")
+    st.header("持仓管理")
     
     selected_codes = st.multiselect(
         "显示的基金",
@@ -164,12 +171,12 @@ with st.sidebar:
         st.session_state.holdings[code]['成本金额'] = cost
     
     st.markdown("---")
-    st.subheader("自动刷新")
+    st.subheader("数据刷新")
     refresh_option = st.selectbox(
-        "刷新间隔",
+        "自动刷新间隔",
         ["关闭", "每10秒", "每15秒", "每30秒", "每60秒"],
         index=1,
-        help="自动拉取最新估值数据"
+        help="自动拉取东方财富最新估值"
     )
 
 # ────────────────────────────────────────────────
@@ -181,14 +188,39 @@ if refresh_option != "关闭":
     st.rerun()
 
 # ────────────────────────────────────────────────
-# 模拟实时估值数据（实际请替换为 akshare 接口）
+# 拉取实时估值数据
 # ────────────────────────────────────────────────
-simulated_data = {
-    '代码': ['000698', '159941', '005827', '110022'],
-    '估算净值': [1.8563, 7.3177, 9.9780, 2.1500],
-    '日涨跌幅%': [-0.68, -0.53, 1.95, 0.45]
-}
-df_rt = pd.DataFrame(simulated_data)
+with st.spinner("正在拉取东方财富实时估值..."):
+    try:
+        df_rt = ak.fund_value_estimation_em(symbol="全部")
+        df_rt['基金代码'] = df_rt['基金代码'].astype(str).str.zfill(6)
+        df_rt = df_rt[df_rt['基金代码'].isin(selected_codes)]
+        
+        # 处理列名（可能带日期前缀）
+        est_nav_col = next((c for c in df_rt.columns if '估算值' in c), None)
+        est_growth_col = next((c for c in df_rt.columns if '估算增长率' in c), None)
+        
+        if not est_nav_col or not est_growth_col:
+            st.error("接口列名变化，无法识别估算值/增长率列。请查看调试信息或稍后再试。")
+            st.stop()
+        
+        df_rt = df_rt[['基金代码', est_nav_col, est_growth_col]]
+        df_rt = df_rt.rename(columns={
+            est_nav_col: '估算净值',
+            est_growth_col: '日涨跌幅%'
+        })
+        
+        df_rt['估算净值'] = pd.to_numeric(df_rt['估算净值'], errors='coerce')
+        df_rt['日涨跌幅%'] = pd.to_numeric(df_rt['日涨跌幅%'].astype(str).str.rstrip('%'), errors='coerce')
+        
+        # 调试列名（可删除）
+        st.caption("当前接口列名（调试用）")
+        st.code(", ".join(df_rt.columns.tolist()))
+        
+    except Exception as e:
+        st.error(f"拉取实时数据失败：{str(e)}")
+        st.info("建议：pip install akshare --upgrade 或检查网络/是否交易日")
+        st.stop()
 
 # ────────────────────────────────────────────────
 # 数据合并与计算
@@ -199,11 +231,14 @@ current_hold = pd.DataFrame([
     if code in selected_codes
 ])
 
-merged = current_hold.merge(df_rt, on='代码', how='left')
+merged = current_hold.merge(df_rt, left_on='代码', right_on='基金代码', how='left')
+merged = merged.drop(columns=['基金代码'], errors='ignore')
 
-merged['估算净值'] = pd.to_numeric(merged['估算净值'], errors='coerce')
-merged['日涨跌幅%'] = pd.to_numeric(merged['日涨跌幅%'], errors='coerce')
+# 名称映射
+name_map = dict(zip(df_base['代码'], df_base['名称']))
+merged['名称'] = merged['代码'].map(name_map)
 
+# 计算收益
 merged['估计金额'] = merged['份额'] * merged['估算净值']
 merged['今日收益(元)'] = merged['估计金额'] * (merged['日涨跌幅%'] / 100)
 merged['累计收益(元)'] = merged['估计金额'] - merged['成本金额']
@@ -220,132 +255,4 @@ total_cum_gain = merged['累计收益(元)'].sum()
 st.markdown(f'<div class="big-number">{total_assets:,.2f}</div>', unsafe_allow_html=True)
 
 today_class = "positive" if total_today_gain >= 0 else "negative"
-cum_class = "positive" if total_cum_gain >= 0 else "negative"
-
-st.markdown(f"""
-<div class="gain-box">
-    <span class="{today_class}">今日 {total_today_gain:+,.2f}</span>
-    &nbsp;&nbsp;|&nbsp;&nbsp;
-    <span class="{cum_class}">累计 {total_cum_gain:+,.2f}</span>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("**持仓明细**")
-
-for _, row in merged.iterrows():
-    name = [n for c, n in zip(df_base['代码'], df_base['名称']) if c == row['代码']][0]
-    amount = row['估计金额']
-    today_gain = row['今日收益(元)']
-    cum_gain = row['累计收益(元)']
-    cum_pct = row['累计收益率(%)']
-    
-    today_class = "positive" if today_gain >= 0 else "negative"
-    cum_class = "positive" if cum_gain >= 0 else "negative"
-    
-    st.markdown(f"""
-    <div class="holding-card">
-        <div class="fund-name">{name}</div>
-        <div class="amount">¥{amount:,.2f}</div>
-        <div class="metrics">
-            <div class="metric-item">
-                <div class="metric-label">今日收益</div>
-      if not selected_funds:
-    st.info("请至少选择或输入一个基金代码")
-else:
-    with st.spinner("正在拉取估值数据..."):
-        try:
-            df = ak.fund_value_estimation_em(symbol="全部")
-            df['基金代码'] = df['基金代码'].astype(str).str.zfill(6)
-            
-            st.caption("调试：当前接口返回的列名")
-            st.code(", ".join(df.columns.tolist()))
-            
-            value_col = next((c for c in df.columns if '估算值' in c), None)
-            growth_col = next((c for c in df.columns if '估算增长率' in c), None)
-            bias_col = next((c for c in df.columns if '偏差' in c), None)
-            
-            if not value_col or not growth_col:
-                st.error("列名匹配失败。请把上方列名列表复制给我。")
-            else:
-                cols = ['基金代码', '基金名称', value_col, growth_col]
-                if bias_col:
-                    cols.append(bias_col)
-                
-                watched = df[df['基金代码'].isin(selected_funds)][cols].copy()
-                
-                watched = watched.rename(columns={
-                    '基金代码': '代码',
-                    '基金名称': '名称',
-                    value_col: '估算净值',
-                    growth_col: '估算涨幅',
-                })
-                if bias_col:
-                    watched = watched.rename(columns={bias_col: '偏差'})
-                
-                watched['估算净值'] = pd.to_numeric(
-                    watched['估算净值'].astype(str).str.replace(',', '').str.strip().replace(['', '--'], float('nan')),
-                    errors='coerce'
-                )
-                
-                watched['估算涨幅(%)'] = pd.to_numeric(
-                    watched['估算涨幅'].astype(str).str.replace('%', '').str.strip().replace(['', '--'], '0'),
-                    errors='coerce'
-                ).fillna(0)
-                
-                if '偏差' in watched.columns:
-                    watched['偏差'] = pd.to_numeric(
-                        watched['偏差'].astype(str).str.replace('%', '').str.strip().replace(['', '--'], '0'),
-                        errors='coerce'
-                    ).fillna(0)
-                
-                watched['估计金额'] = 0.0
-                for idx, row in watched.iterrows():
-                    code = row['代码']
-                    nav = row['估算净值']
-                    shares = st.session_state.fund_shares.get(code, 0.0)
-                    if pd.notna(nav) and shares > 0:
-                        watched.at[idx, '估计金额'] = nav * shares
-                
-                watched = watched.sort_values('估算涨幅(%)', ascending=False).reset_index(drop=True)
-                
-                def fmt_float(x):
-                    return "—" if pd.isna(x) else f"{x:.4f}"
-                
-                def fmt_pct(x):
-                    return "—" if pd.isna(x) else f"{x:+.2f}%"
-                
-                def fmt_money(x):
-                    return "—" if x <= 0 else f"{x:,.2f}"
-                
-                st.subheader(f"估值快照（{len(watched)} 只）")
-                st.dataframe(
-                    watched.style.format({
-                        '估算净值': fmt_float,
-                        '估算涨幅(%)': fmt_pct,
-                        '偏差': fmt_pct if '偏差' in watched.columns else None,
-                        '估计金额': fmt_money
-                    }).background_gradient(
-                        subset=['估算涨幅(%)'],
-                        cmap='RdYlGn',
-                        vmin=-5,
-                        vmax=5
-                    ),
-                    use_container_width=True
-                )
-                
-                total = watched['估计金额'].sum()
-                if total > 0:
-                    st.success(f"估算总金额 ≈ {total:,.2f} 元")
-                
-                st.subheader("涨幅对比")
-                st.bar_chart(
-                    watched.set_index('名称')['估算涨幅(%)'].fillna(0),
-                    height=400
-                )
-        
-        except Exception as e:
-            st.error(f"发生错误：{str(e)}")
-            st.info("建议：pip install akshare --upgrade 或检查网络/交易日")
-
-st.markdown("---")
-st.caption("数据仅供参考 | 金额基于用户输入的份额估算")
+c
