@@ -219,9 +219,21 @@ else:
     st.info("暂无持仓或数据未加载。请在侧边栏输入份额，或等待交易日。")
 
 # 底部导航
-st.markdown("""
-<div class="bottom-nav">
-    <div class="nav-item">🏠 首页</div>
-    <div class="nav-item">⭐ 自选</div>
-    <div class="nav-item">🔍 发现</div>
-    <div 
+# 替换原来的多行 f-string
+st.markdown(
+    '<div class="holding-card">'
+    f'<div class="fund-name">{row["名称"]}</div>'
+    f'<div class="amount">¥{row["估计金额"]:,.2f}</div>'
+    '<div class="metrics">'
+    f'<div class="metric-item">'
+    '  <div class="metric-label">今日收益</div>'
+    f'  <div class="{today_class}">{today_gain:+,.2f} ({row["日涨跌幅%"]:+.2f}%)</div>'
+    '</div>'
+    f'<div class="metric-item">'
+    '  <div class="metric-label">累计收益</div>'
+    f'  <div class="{cum_class}">{cum_gain:+,.2f} ({cum_pct:+.2f}%)</div>'
+    '</div>'
+    '</div>'
+    '</div>',
+    unsafe_allow_html=True
+)
