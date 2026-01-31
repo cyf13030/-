@@ -4,15 +4,15 @@ import akshare as ak
 import time
 from datetime import datetime
 
-# 页面配置：电脑强制展开侧边栏，手机折叠
+# 页面配置
 st.set_page_config(
     page_title="小倍养基 - 成长养基",
     page_icon="💰",
     layout="wide",
-    initial_sidebar_state="expanded"  # 电脑端直接看到侧边栏
+    initial_sidebar_state="expanded"  # 电脑强制展开侧边栏
 )
 
-# CSS - 使用 r""" 原始字符串，避免 Python 解析 px/em 报错
+# CSS - 使用 r""" 原始字符串，避免 px/em 报错
 st.markdown(r"""
 <style>
     .stApp { background: linear-gradient(135deg, #fff8e1 0%, #fffde7 100%); }
@@ -74,14 +74,14 @@ st.markdown(r"""
 # 标题
 st.markdown('<div class="header-bar">小倍养基 - 成长养基</div>', unsafe_allow_html=True)
 
-# 手机端最醒目引导（放在最上面）
-st.warning("📱 手机用户：请点击左上角三横图标（☰）或从屏幕左侧向右滑动打开侧边栏 → 修改持仓份额/成本金额")
+# 手机端引导
+st.warning("📱 手机用户：点击左上角三横图标（☰）或从左侧向右滑动打开侧边栏 → 修改持仓份额/成本金额")
 
-# 主页面常驻刷新按钮
+# 刷新按钮
 if st.button("🔄 立即刷新数据", type="primary", use_container_width=True):
     st.rerun()
 
-# 基金列表（可自行添加更多）
+# 基金列表
 fund_list = [
     {"代码": "110022", "名称": "易方达优选成长混合"},
     {"代码": "001593", "名称": "南方成份精选混合"},
@@ -89,14 +89,14 @@ fund_list = [
     {"代码": "519697", "名称": "长信量化先锋股票"},
 ]
 
-# session_state 保存持仓
+# session_state
 if 'holdings' not in st.session_state:
     st.session_state.holdings = {
         f["代码"]: {"份额": 0.0, "成本金额": 0.0}
         for f in fund_list
     }
 
-# 侧边栏（放在最后，确保前面语法无误）
+# 侧边栏
 with st.sidebar:
     st.header("持仓设置")
     
@@ -152,7 +152,7 @@ with st.spinner("正在获取东方财富实时估值..."):
         est_growth_col = next((c for c in df_rt.columns if '估算增长率' in c), None)
         
         if not est_nav_col or not est_growth_col:
-            st.warning("接口列名变化，无法识别估算值/增长率。请查看调试或稍后再试。")
+            st.warning("接口列名变化，无法识别估算值/增长率。请稍后再试。")
             df_rt = pd.DataFrame()
         else:
             df_rt = df_rt[['基金代码', est_nav_col, est_growth_col]]
@@ -178,6 +178,57 @@ if not hold_df.empty and not df_rt.empty:
     merged['名称'] = merged['代码'].map({f['代码']: f['名称'] for f in fund_list})
     
     merged['估计金额'] = merged['份额'] * merged['估算净值']
+    merged['今日收益(元)'] = merged['估计金额'] * (merged['日涨跌幅%'] / 100)
+    merged['累计收益(元)'] = merged['估计金额'] - merged['成本金额']
+    merged['累计收益率(%)'] = ((merged['估计金额'] - merged['成本金额']) / merged['成本金额'].replace(0, float('nan'))) * 100
+
+    total_assets = merged['估计金额'].sum()
+    total_today = merged['今日收益(元)'].sum()
+    total_cum = merged['累计收益(元)'].sum()
+
+    st.markdown(f'<div class="big-number">{total_assets:,.2f}</div>', unsafe_allow_html=True)
+
+    today_class = "positive" if total_today >= 0 else "negative"
+    cum_class = "positive" if total_cum >= 0 else "negative"
+
+    st.markdown(f"""
+    <div class="gain-box">
+        <span class="{today_class}">今日收益 {total_today:+,.2f}</span>
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <span class="{cum_class}">累计收益 {total_cum:+,.2f}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("**持仓明细**")
+
+    for _, row in merged.iterrows():
+        st.markdown(f"""
+        <div class="holding-card">
+            <div class="fund-name">{row['名称']}</div>
+            <div class="amount">¥{row['估计金额']:,.2f}</div>
+            <div class="metrics">
+                <div class="metric-item">
+                    <div class="metric-label">今日收益</div>
+                    <div class="{'positive' if row['今日收益(元)'] >= 0 else 'negative'}">
+                        {row['今日收益(元)']:+,.2f} ({row['日涨跌幅%']:+.2f}%)
+                    </div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">累计收益</div>
+                    <div class="{'positive' if row['累计收益(元)'] >= 0 else 'negative'}">
+                        {row['累计收益(元)']:+,.2f} ({row['累计收益率(%)']:+.2f}%)
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+else:
+    st.info("暂无持仓数据或估值未加载。请在侧边栏输入份额，或等待交易日。")
+
+# 底部导航
+st.markdown("""
+<div class="bottom-nav">
+      merged['估计金额'] = merged['份额'] * merged['估算净值']
     merged['今日收益(元)'] = merged['估计金额'] * (merged['日涨跌幅%'] / 100)
     merged['累计收益(元)'] = merged['估计金额'] - merged['成本金额']
     merged['累计收益率(%)'] = ((merged['估计金额'] - merged['成本金额']) / merged['成本金额'].replace(0, float('nan'))) * 100
