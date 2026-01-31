@@ -232,4 +232,6 @@ st.markdown("""
     <div class="nav-item">⭐ 自选</div>
     <div class="nav-item">🔍 发现</div>
     <div class="nav-item">📈 行情</div>
-    <div clas
+    <div class="nav-item">👤 我的</div>
+</div>
+""", unsafe_allow_html=True)
