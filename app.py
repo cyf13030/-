@@ -223,7 +223,7 @@ if not hold_df.empty and not df_rt.empty:
         </div>
         """, unsafe_allow_html=True)
 else:
-    st.info("暂无持仓数据或估值未加载。请在侧边栏输入份额        width: 100% !important;
+    st.info("暂无持仓数据或估值未加载。请在侧边栏输入份额，或等待交易日。")        width: 100% !important;
         margin: 12px 0 !important;
     }
 </style>
