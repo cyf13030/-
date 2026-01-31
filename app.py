@@ -4,6 +4,7 @@ import akshare as ak
 import time
 from datetime import datetime
 
+# 页面配置
 st.set_page_config(
     page_title="小倍养基 - 成长养基",
     page_icon="💰",
@@ -46,7 +47,6 @@ st.markdown("""
 
     .metrics { display: flex; flex-direction: column; gap: 12px; font-size: 1em; color: #555; }
     .metric-item { padding: 10px 0; border-top: 1px solid #eee; }
-    .metric-label { font-weight: 500; color: #777; }
 
     button[kind="primary"], button {
         font-size: 1.2em !important;
@@ -60,7 +60,7 @@ st.markdown("""
 
 # 标题 + 引导
 st.markdown('<div class="header-bar">小倍养基 - 成长养基</div>', unsafe_allow_html=True)
-st.warning("📱 手机用户：点击左上角三横图标（☰）或左侧向右滑动打开侧边栏 → 修改持仓")
+st.warning("📱 手机用户：点击左上角三横图标（☰）或从左侧向右滑动打开侧边栏 → 修改持仓")
 
 # 常驻刷新按钮
 if st.button("🔄 立即刷新数据", type="primary", use_container_width=True):
@@ -154,8 +154,8 @@ if not hold_df.empty and not df_rt.empty:
 
     st.markdown(f"""
     <div class="gain-box">
-        <span class="{today_class}">今日 {total_today:+,.2f}</span> | 
-        <span class="{cum_class}">累计 {total_cum:+,.2f}</span>
+        <span class="{today_class}">今日收益 {total_today:+,.2f}</span> | 
+        <span class="{cum_class}">累计收益 {total_cum:+,.2f}</span>
     </div>
     """, unsafe_allow_html=True)
 
