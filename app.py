@@ -223,4 +223,15 @@ if not hold_df.empty and not df_rt.empty:
         </div>
         """, unsafe_allow_html=True)
 else:
-    st.info("暂无持仓数据或估值未加载。请在侧边栏输入
+    st.info("暂无持仓数据或估值未加载。请在侧边栏输入份额，或等待交易日。")
+
+# 底部导航
+st.markdown("""
+<div class="bottom-nav">
+    <div class="nav-item">🏠 首页</div>
+    <div class="nav-item">⭐ 自选</div>
+    <div class="nav-item">🔍 发现</div>
+    <div class="nav-item">📈 行情</div>
+    <div class="nav-item">👤 我的</div>
+</div>
+""", unsafe_allow_html=True)
